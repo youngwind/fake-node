@@ -1,0 +1,1 @@
+out/x64.release/libv8_base.a filter=lfs diff=lfs merge=lfs -text

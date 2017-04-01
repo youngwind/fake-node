@@ -1,0 +1,8 @@
+.DS_Store
+.idea
+command.txt
+cmake-build-debug
+hello_world
+main
+test.cpp
+test
