@@ -2,6 +2,19 @@
 #include "include/libplatform/libplatform.h"
 #include <assert.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <errno.h>
+#include <netdb.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <iostream>
+
+#include <fstream>
+
+using namespace std;
 
 v8::Local<v8::Context> CreateShellContext(v8::Isolate *isolate);
 
@@ -10,6 +23,8 @@ void RunShell(v8::Local<v8::Context> context);
 bool ExecuteString(v8::Isolate *isolate, v8::Local<v8::String> source);
 
 void Console(const v8::FunctionCallbackInfo<v8::Value> &args);
+
+void NewHttp(const v8::FunctionCallbackInfo<v8::Value> &args);
 
 class ShellArrayBufferAllocator : public v8::ArrayBuffer::Allocator {
 public:
@@ -58,6 +73,11 @@ v8::Local<v8::Context> CreateShellContext(v8::Isolate *isolate) {
             v8::String::NewFromUtf8(isolate, "console", v8::NewStringType::kNormal)
                     .ToLocalChecked(),
             v8::FunctionTemplate::New(isolate, Console));
+    global->Set(
+            v8::String::NewFromUtf8(isolate, "newHttp", v8::NewStringType::kNormal)
+                    .ToLocalChecked(),
+            v8::FunctionTemplate::New(isolate, NewHttp));
+
     return v8::Context::New(isolate, NULL, global);
 }
 
@@ -66,6 +86,53 @@ void Console(const v8::FunctionCallbackInfo<v8::Value> &args) {
     printf("%s", *str);
     printf("\n");
     fflush(stdout);
+}
+
+void NewHttp(const v8::FunctionCallbackInfo<v8::Value> &args) {
+    int port = 80;
+    string hostname = "www.baidu.com";
+    int server;
+    struct sockaddr_in server_addr;
+    char buf[1024];
+    string request;
+    if (!args[0]->IsNull()) {
+        v8::String::Utf8Value param1(args[0]->ToString());
+        hostname = string(*param1);
+    }
+    if (!args[1]->IsNull()) {
+        port = (int)(args[1]->IntegerValue());
+    }
+
+    request += "GET / ";
+    request += "HTTP/1.1\r\n";
+    request += "Host: ";
+    request += hostname;
+    request += "\r\n\r\n";   // 要注意最后的回车换行
+
+    server = socket(PF_INET, SOCK_STREAM, 0);
+    if (server < 0) {
+        perror("socket");
+        exit(-1);
+    }
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+
+    if (connect(server, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+        perror("connect");
+        exit(-1);
+    }
+
+    // 发送请求
+    send(server, request.c_str(), request.length(), 0);
+
+    // 接收返回
+    recv(server, buf, 1024, 0);
+
+    // 打印返回值
+    cout << buf << endl;
+
+    close(server);
 }
 
 void RunShell(v8::Local<v8::Context> context) {
